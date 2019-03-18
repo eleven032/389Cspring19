@@ -11,6 +11,7 @@ public class TxHandler {
      */
     public TxHandler(UTXOPool utxoPool) {
         /* your code here */
+    	this.pool = new UTXOPool(utxoPool);
     }
 
     /**
@@ -24,6 +25,38 @@ public class TxHandler {
      */
     public boolean isValidTx(Transaction tx) {
         /* your code here */
+    	UTXOPool utxo = new UTXOPool();
+        double inputSum = 0.0;
+        double outputSum = 0.0;
+        
+        for (int i = 0; i < tx.numInputs(); i++) {
+            Transaction.Input in = tx.getInput(i);
+            UTXO trans = new UTXO(in.prevTxHash, in.outputIndex);
+            Transaction.Output out = pool.getTxOutput(trans);
+
+            if (!pool.contains(trans)) {
+                return false;
+            }
+            if(!Crypto.verifySignature(out.address, tx.getRawDataToSign(i), in.signature) || utxo.contains(trans)) {
+            	return false;
+            }
+
+            utxo.addUTXO(trans, out);
+            inputSum += out.value;
+        }
+
+        for (Transaction.Output out : tx.getOutputs()) {
+            if (out.value < 0) {
+                return false;
+            }
+            outputSum += out.value;
+        }
+
+        if (outputSum > inputSum) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -33,6 +66,27 @@ public class TxHandler {
      */
     public Transaction[] handleTxs(Transaction[] possibleTxs) {
         /* your code here */
+    	HashSet<Transaction> vTrans = new HashSet<>();
+
+        for (Transaction trans : possibleTxs) {
+            if (isValidTx(trans)) {
+                vTrans.add(trans);
+
+                for (Transaction.Input input : trans.getInputs()) {
+                    UTXO part = new UTXO(input.prevTxHash, input.outputIndex);
+                    pool.removeUTXO(part);
+                }
+
+                for (int index = 0; index < trans.numOutputs(); index++) {
+                    Transaction.Output out = trans.getOutput(index);
+                    UTXO part = new UTXO(trans.getHash(), index);
+                    pool.addUTXO(part, out);
+                }
+            }
+        }
+
+        Transaction[] validTrans = new Transaction[vTrans.size()];
+        return vTrans.toArray(validTrans);
     }
 
 }
