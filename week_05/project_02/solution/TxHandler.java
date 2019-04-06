@@ -26,15 +26,15 @@ public class TxHandler {
     public boolean isValidTx(Transaction tx) {
         /* your code here */
     	UTXOPool utxo = new UTXOPool();
-        double inputSum = 0.0;
-        double outputSum = 0.0;
+        int inputSum = 0;
+        int outputSum = 0;
         
         for (int i = 0; i < tx.numInputs(); i++) {
             Transaction.Input in = tx.getInput(i);
             UTXO trans = new UTXO(in.prevTxHash, in.outputIndex);
             Transaction.Output out = pool.getTxOutput(trans);
 
-            if (!pool.contains(trans)) {
+            if (pool.contains(trans)) {
                 return false;
             }
             if(!Crypto.verifySignature(out.address, tx.getRawDataToSign(i), in.signature) || utxo.contains(trans)) {
@@ -45,16 +45,8 @@ public class TxHandler {
             inputSum += out.value;
         }
 
-        for (Transaction.Output out : tx.getOutputs()) {
-            if (out.value < 0) {
-                return false;
-            }
-            outputSum += out.value;
-        }
+        
 
-        if (outputSum > inputSum) {
-            return false;
-        }
 
         return true;
     }
