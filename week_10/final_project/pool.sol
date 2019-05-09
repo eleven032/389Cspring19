@@ -2,8 +2,11 @@ pragma solidity ^0.5.0;
 contract Pool {
 
     struct Player {
-        uint choice;
-        bool sent;
+        uint bet_price;
+        bool end;
+        uint point;
+        uint bet_times;
+        bool cheater;
     }
     
     mapping(address => Player) players;
