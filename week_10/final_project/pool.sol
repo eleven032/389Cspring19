@@ -1,89 +1,307 @@
-pragma solidity ^0.5.0;
-contract Pool {
+pragma solidity >=0.4.22 <0.6.0;
 
+
+contract Game {
     struct Player {
-        uint bet_price;
-        bool end;
+        uint pointCount; 
+        bool end;  
+        uint betTime; 
+        uint betPrice;
+        bool cheat;
+        bool exist;
+        address add;
+    }
+    
+    
+    struct Dealer {
         uint point;
-        uint bet_times;
-        bool cheater;
+        uint betTime;
     }
     
-    mapping(address => Player) players;
-    address payable[] addresses;
-    mapping(address => bool) malicious;
-    uint8 num_of_players;
-    uint8 max_players;
-    bool protocol_is_finished;
-
-    // You can assume num is always >= 2
-    // You can assume that at least one winner will be an honest participant
-    constructor (uint8 num) public {
-        if (num < 2) {
-            revert();
-        }
-        // Create a new Pool system. The pool is first come first serve. The
-        // number of players in this instance of the pool is determined by num
-        // when the contract is initiated. Players are required to submit their
-        // choice of the winning team along with a deposit of 1 ETH. When
-        // all players have submitted their choice, the winning players are
-        // automatically determined, and the deposits are then split evenly
-        // among the winning player. If a player tries to submit two choices
-        // (i.e., change their bet at any point), they are marked as malicious
-        // and are not allowed to collect money even if they are one of the
-        // winners. If a player is marked as malicious but is on the winning
-        // team, the total deposits should just be distributed among the honest
-        // winners. If a player is marked as malicious but is on the losing team,
-        // they can be ignored because they would not have won any money anyway.
-        max_players = num;
-        num_of_players = 0;
+    address dealer;
+    uint maxPlayer;
+    uint playerCount;
+    bool stop;
+    bool endGame;
+    Dealer abc;
+    uint deposit_amount = 0;
+    uint base_money = 0;
+    uint total_bet = 0;
+    
+    
+    mapping (address => Player) players;
+    address []  addresses;
+    Player [] allPlayers;
+    Player [] loser;
+    Player [] finalRound;
+    Player [] cheaters;
+    Player [] winners;
+    
+    
+    
+    constructor(uint256 max_player) public {
+        abc = Dealer(0, 0);
+        dealer = msg.sender;
+        maxPlayer = max_player;
+        playerCount =0;
+        stop = false;
+        endGame = false;
     }
     
-    // Send in your choice $(num).
-    function choice(uint8 num) public payable {
-        // If they send any more or less than 1 ETH or we've already run and
-        // completed the protocol, revert
-        if (msg.value != 1 ether || protocol_is_finished) {
-            revert();
+    
+    
+    function Show_Deposite() pure public returns (string){
+        return "Deposite for this game is 10";
+    }
+    
+    
+    function Add_BaseMoney_Dealer() public payable{
+        // we,as dealer, will put 80 ether into the contract first
+        //in case if we lost in the first round
+        base_money = msg.value;
+    }
+    
+    function Pay_Deposite_Player() public payable returns (string){
+        if(msg.value!= 10**19){
+            return "This is not the amount of requirement, please check the deposite amount by clicking Show_Deposite_Amount";
+        } else {
+            if(stop==true||endGame==true){
+                msg.sender.transfer(msg.value);
+                return;
+            }else{
+                //check player number
+                if(playerCount==maxPlayer){
+                    stop=true;
+                    msg.sender.transfer(msg.value);
+                    return;
+                }else{
+                    deposit_amount += msg.value;
+                    return "Deposit complete";
+                }
+            }
+ 
         }
-        Player storage sender = players[msg.sender];
-        // if a player is trying make a choice that is not 0 or 1, or is
-        // trying to change their vote, return the ether to them and penalize
-        // them by marking their deposit to be sent to the honest
-        // winner(s)
-        if (sender.sent || (num != 0 && num != 1)) {
-            malicious[msg.sender] = true;
-            msg.sender.transfer(1 ether);
+    }
+    
+    // enter value = bet before click this Join_The_Game
+    function Join_The_Game_Player() public payable{
+        //check game end?
+        if(stop==true||endGame==true){
+            msg.sender.transfer(msg.value);
+            return;
+        } 
+        
+        //check player number
+        if(playerCount==maxPlayer){
+            stop=true;
+            msg.sender.transfer(msg.value);
             return;
         }
-        addresses.push(msg.sender);
-        sender.sent = true;
-        sender.choice = num;
-        num_of_players++;
-        // if all players have joined, determine the winner and send money
-        if (num_of_players == max_players) {
-            payWinner();
+        
+        
+        if(!players[msg.sender].exist){
+            
+            players[msg.sender] = Player(0, false, 0, msg.value, false, true, msg.sender);
+            
+            total_bet += msg.value;
+
+            addresses.push(msg.sender);
+            playerCount++;
+            return;
+            
+        }else{
+            //mistaken click
+            return;
+        }
+        
+        
+    }
+    
+    function Draw_Card() public{
+        if(msg.sender == dealer){
+            if(abc.betTime==5){
+                return;
+            } else {
+                abc.point += random();
+                abc.betTime += 1;
+                return;
+            }
+        }else{
+            if(players[msg.sender].exist){
+                //cheater detect
+                if(players[msg.sender].end==true||players[msg.sender].betTime>=5){
+                    players[msg.sender].cheat = true;
+                    players[msg.sender].end=true;
+                    return;
+                }
+            players[msg.sender].pointCount += random();
+            players[msg.sender].betTime +=1;
+            return;
+            }else{
+                return;
+            }
+            
+        }
+        
+    }
+    
+    function End_Bet_Player() public {
+        if(!players[msg.sender].exist){
+            return;
+        }
+        players[msg.sender].end = true;
+    }
+    
+    
+    
+    function Check_If_End() private view returns (bool) {
+        // return addresses.length;
+        for(uint i=0;i<addresses.length;i++){
+            if(players[addresses[i]].end==false){
+                return false;
+            }
+        }
+        
+        return true;
+        
+     
+    }
+    
+    function winner() private{
+        for(uint i =0;i<finalRound.length;i++){
+            if(finalRound[i].pointCount>=abc.point){
+                winners.push(finalRound[i]);
+            } else {
+                loser.push(finalRound[i]);
+            }
         }
     }
     
-    // You can always assume at least one winner is honest
-    function payWinner() public {
-        if (protocol_is_finished) revert();
-        uint winningTeam = uint(blockhash(block.number-1)) % 2;
-        uint8 num_of_winners = 0;
-        for (uint8 i = 0; i < num_of_players; i++) {
-            if (players[addresses[i]].choice == winningTeam &&
-                !malicious[addresses[i]]) {
-                num_of_winners++;
+    function End_Game_Dealer() public{
+        if(msg.sender == dealer){
+            if(Check_If_End()){
+                for(uint i = 0;i<addresses.length;i++){
+                    if(players[addresses[i]].cheat){
+                        cheaters.push(players[addresses[i]]);
+                    } else {
+                        if(players[addresses[i]].pointCount<=21){
+                            finalRound.push(players[addresses[i]]);
+                        }else {
+                            loser.push(players[addresses[i]]);
+                        }
+                    }
+                }
+                
+                winner();
+                endGame = true;
+                
+                
+            } else {
+                return;
             }
+        } else {
+            return;
         }
-        uint payout = (num_of_players * 1000) / num_of_winners;
-        for (uint8 j = 0; j < num_of_players; j++) {
-            if (players[addresses[j]].choice == winningTeam &&
-                !malicious[addresses[j]]) {
-                addresses[j].transfer(payout * 1 finney);
-            }
-        }
-        protocol_is_finished = true;
+            
     }
+    
+    
+    //TODO: winner in winners array
+    //loser in losers array
+    // cheater in cheaters array
+    
+    function() public payable {
+        // this function enables the contract to receive funds
+    }
+    
+    function Final_Compute_Dealer() public payable{
+        require(msg.sender == dealer);
+        
+        if(winners.length != 0){
+            for (uint i=0; i< winners.length; i++) {
+            //return deposit and bet and rewards to winner
+            // return deposit
+            
+            address current_winner = winners[i].add;
+            
+            current_winner.transfer(10 ether);
+            deposit_amount -= 10**19;
+            // return bet and equal amount of rewards
+            uint rewards = 2*(winners[i].betPrice);
+            
+            winners[i].add.transfer(rewards);
+            
+            total_bet -= winners[i].betPrice;
+            base_money -= winners[i].betPrice;
+            // funds -= rewards;
+            // 1000000000000000000
+            
+            }
+        }
+        
+        if(loser.length != 0){
+            for (uint j=0; j< loser.length; j++) {
+            //return deposit to winner
+            
+            address current_loser = loser[j].add;
+            
+            current_loser.transfer(10 ether);
+            deposit_amount -= 10**19;
+            }
+        }
+        
+        if(cheaters.length != 0){
+            for (uint k = 0; k < cheaters.length; k++) {
+            uint punish = cheaters[k].betPrice;
+                
+            dealer.transfer(punish);
+            total_bet -= punish;
+            
+            dealer.transfer(10 ether);
+            deposit_amount -= 10**19;
+            
+            }
+        }
+        
+        dealer.transfer(deposit_amount+total_bet+base_money);
+        
+        
+    }
+    
+    
+    
+    function Point_Player () constant public returns (uint Player_Point){
+        if(msg.sender==dealer){
+            return;
+        } else {
+            return players[msg.sender].pointCount;
+        }
+    }
+    
+    function Rounds_Player () constant public returns (uint Player_Rounds){
+        if(msg.sender==dealer){
+            return;
+        } else {
+            return players[msg.sender].betTime;
+        }
+    }
+    
+    
+    function Point_Dealer() constant public returns (uint Dealer_point) {
+        return abc.point;
+    }
+    
+    function Rounds_Dealer() constant public returns (uint Dealer_Rounds) {
+        return abc.betTime;
+    }
+    
+
+    function random() private view returns (uint256) {
+        uint random = uint256(keccak256(block.timestamp, block.difficulty))%10;
+        if(random == 0) return 1;
+        return random;
+    }
+    
+    
+
 }
